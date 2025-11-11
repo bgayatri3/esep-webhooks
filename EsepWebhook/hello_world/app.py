@@ -1,77 +1,40 @@
 import json
-
-# import requests
-
+import os
+import requests
 
 def lambda_handler(event, context):
-    """Sample pure Lambda function
+    # GitHub webhook payload comes in 'body'
+    body = event.get("body", "{}")
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except json.JSONDecodeError:
+            return {
+                "statusCode": 400,
+                "body": "Invalid JSON in request body"
+            }
 
-    Parameters
-    ----------
-    event: dict, required
-        API Gateway Lambda Proxy Input Format
+    # Extract the issue URL
+    issue_url = body.get("issue", {}).get("html_url")
 
-        Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+    # Prepare the payload for Slack
+    payload_text = f"Issue Created: {issue_url}" if issue_url else "Issue Created: None"
+    payload = {"text": payload_text}
 
-    context: object, required
-        Lambda Context runtime methods and attributes
+    # Send to Slack using environment variable
+    slack_url = os.environ.get("SLACK_URL")
+    if not slack_url:
+        return {
+            "statusCode": 500,
+            "body": "Slack URL environment variable not set"
+        }
 
-        Context doc: https://docs.aws.amazon.com/lambda/latest/dg/python-context-object.html
-
-    Returns
-    ------
-    API Gateway Lambda Proxy Output Format: dict
-
-        Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
-    """
-
-    # try:
-    #     ip = requests.get("http://checkip.amazonaws.com/")
-    # except requests.RequestException as e:
-    #     # Send some context about this error to Lambda Logs
-    #     print(e)
-
-    #     raise e
-
+    response = requests.post(slack_url, json=payload)
+    
     return {
-        "statusCode": 200,
-        "body": json.dumps({
-            "message": "hello world",
-            # "location": ip.text.replace("\n", "")
-        }),
+        "statusCode": response.status_code,
+        "body": response.text,
+        "headers": {
+            "Content-Type": "text/plain"
+        }
     }
-
-##################################################
-# import json
-
-# def lambda_handler(event, context):
-#     """
-#     AWS Lambda handler for GitHub Webhook events.
-#     """
-
-#     print("Received event:", json.dumps(event))
-
-#     # Parse body
-#     try:
-#         body = json.loads(event.get('body', '{}'))
-#     except json.JSONDecodeError:
-#         return {
-#             "statusCode": 400,
-#             "body": json.dumps({"message": "Invalid JSON"})
-#         }
-
-#     # Get GitHub event type from headers
-#     github_event = event.get('headers', {}).get('X-GitHub-Event', 'unknown')
-#     print(f"GitHub event type: {github_event}")
-
-#     # Example: handle push event
-#     if github_event == "push":
-#         repo = body.get("repository", {}).get("full_name", "unknown")
-#         pusher = body.get("pusher", {}).get("name", "unknown")
-#         print(f"Push to {repo} by {pusher}")
-
-#     return {
-#         "statusCode": 200,
-#         "body": json.dumps({"message": "Received", "event": github_event})
-#     }
-##################################################
